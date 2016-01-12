@@ -1,0 +1,1694 @@
+<head>
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type"><title>Calendar - [C:/Spirin, Vitaly/Projects/Web/Calendar/my_calendar.htm]</title></head>
+<body>
+<style type="text/css">
+    input[type="button"], input[type="text"] {float: le ft;}
+    
+    textarea.s {border: none; overflow: hidden; background-color: silver;}
+    textarea.sb {overflow: hidden; background-color: silver;}
+    textarea.w {border: none; overflow: hidden; background-color: white;}
+    textarea.wb {overflow: hidden; background-color: white;}
+
+    h2.i {display: inline;}
+
+    table {border: 0}
+    
+    #calendar_field td {border: 1px solid black}
+    td.n {color: navy; width: 13%}
+    td.r {color: red; width: 13%}
+    td.l {color: red; width: 13.4%}
+    td.b {color: black;}
+      td.b h2 {margin-bottom: 0.85em}
+
+    a:hover {color: red;}
+    
+    #histogram_graph
+    {
+      position: absolute;
+      width: 800px;
+      height: 200px;
+      border: 1px solid black;
+      padding: 1em;
+      left: 50%;
+      margin-left: -400px;
+      margin-bottom: 1em;
+    }
+ 
+    #radio_buttons
+    {
+      position: absolute;
+      left: 50%;
+      margin-left: 440px;
+    }
+    
+    #space_holder /* to shift down calendar area since histogram has absolute position and overlap calendar */
+    {
+      margin-bottom: 260px;
+    }
+  </style>
+<!-- saved from url=(0014)about:internet -->
+<script>
+
+<!-- Author: Vitaly Spirin -->
+<!-- 3 March 2007     - Start of the script. -->
+<!-- 14 June 2007     - Release of version 1.0 -->
+<!-- 18 August 2007   - Release of version 1.1 -->
+<!-- 10 December 2007 - Release of version 1.2 -->
+<!-- 22 March 2008    - Release of version 1.3 -->
+<!-- 07 April 2013    - Release of version 1.4 (added textbox for filtering) -->
+<!-- 06 May 2013      - Release of version 1.5 (added histogram) -->
+<!-- 22 Sep 2013      - Release of version 1.6 (added query string parameter: filter= and graph) -->
+
+var title;
+// -----------------------------------------------------------------------------
+function PreLoadInit()
+{
+  title = "Calendar - [" + GetConvertedFileName(document.URL); // closing "]" is not included
+  ShowTitleWithoutAsteric();
+
+  document.getElementById("year").value = (new Date()).getFullYear();
+  document.getElementById("month").selectedIndex = (new Date()).getMonth();
+
+  // setting up TEXTAREA length and width (bugzilla #33654)
+  if (document.all)
+  {
+    TA_length = IE_TA_length;
+    TA_width = IE_TA_width;
+    document.getElementById("short_long_textarea_button").style.display = "none";
+    document.getElementById("save_with_tables").value = "SaveAs with tables";
+    document.getElementById("save_with_text").value = "SaveAs with text";
+  } else
+  {
+    if (document.getElementById("FF_TA_cols").value == "short") TA_length = FF_TA_length;
+    else TA_length = FF_TA_long_length;
+    TA_width = FF_TA_width;
+    document.getElementById("short_long_textarea_button").style.display = "";
+    document.getElementById("save_with_tables").value = "Save with tables";
+    document.getElementById("save_with_text").value = "Save with text";
+  }; // if
+}
+
+
+// -----------------------------------------------------------------------------
+function PostLoadInit()
+{
+  // in case table was in "read-only" mode while saved switch into "read-write" mode
+  var array_of_buttons = document.getElementsByTagName("button");
+  for (var i = 0; i <= array_of_buttons.length - 1; i++) array_of_buttons[i].disabled = false;
+
+  document.getElementById("calendar_field").onclick = function(event) {OnClick(event);}
+  document.getElementById("calendar_field").onkeydown = function(event) {OnKeyDown(event);}
+
+  // attaching event handlers if the tables are part of .html file
+  textarea_array = document.getElementById("calendar_field").getElementsByTagName("textarea");
+  for (var i = 0; i < textarea_array.length; i++)
+  {
+    textarea_array[i].onblur = function(event) {On_Blur(event);}
+    textarea_array[i].onfocus = function(event) {OnFocus(event);}
+    if ( (document.all && document.getElementById("web_browser").value == "FF") || 
+       (!document.all && document.getElementById("web_browser").value == "IE"))
+       // if file is opened in a browser different than it was saved by
+    {
+      textarea_array[i].cols = TA_length;
+      textarea_array[i].rows = TA_width;
+    }; // if
+  }; // for
+
+  if (document.getElementById("textarea").value != "") ProcessData(); // don't erase menu
+
+  document.getElementById("loading_message").style.display = "none";
+  document.getElementById("all_visible_area").style.display = "";
+}
+
+
+// -----------------------------------------------------------------------------
+function ShowTitleWithAsteric()
+{
+  document.title = title + " *]";
+}
+
+
+// -----------------------------------------------------------------------------
+function ShowTitleWithoutAsteric()
+{
+  document.title = title + "]";
+}
+
+
+// -----------------------------------------------------------------------------
+function GetConvertedFileName(filename)
+{
+  filename = unescape(filename); // won't work outside of standard (English) codepage letters
+                                 // are not supported! decodeURI() outputs "malformed URI 
+                                 // sequence" on non-standard letters.
+  filename = filename.replace(/^file:\/+/, "");
+
+  return filename;
+}
+
+
+// -----------------------------------------------------------------------------
+function SaveFileInFF(str, filename)
+{
+  filename = GetConvertedFileName(filename);
+  filename = filename.replace(/\//g, "\\\\"); // in FF document.URL has forward slashes
+
+  // in FF "end of line" is "\n" (not "\r\n") so if to save like that, IE won't find "mark of the web"
+  str = str.replace("<!-- saved from url=(0014)about:internet -->",
+              "<!-- saved from url=(0014)about:internet -->\r");
+
+  // from http://www.captain.at/programming/xul/
+  try {
+    netscape.security.PrivilegeManager.enablePrivilege("UniversalXPConnect");
+
+    var file = Components.classes["@mozilla.org/file/local;1"]
+      .createInstance(Components.interfaces.nsILocalFile);
+  
+    file.initWithPath(filename);
+    if ( file.exists() == false ) {
+      file.create( Components.interfaces.nsIFile.NORMAL_FILE_TYPE, 420 );
+    }
+    var outputStream = Components.classes["@mozilla.org/network/file-output-stream;1"]
+      .createInstance( Components.interfaces.nsIFileOutputStream );
+
+    /* Open flags 
+    #define PR_RDONLY       0x01
+    #define PR_WRONLY       0x02
+    #define PR_RDWR         0x04
+    #define PR_CREATE_FILE  0x08
+    #define PR_APPEND      0x10
+    #define PR_TRUNCATE     0x20
+    #define PR_SYNC         0x40
+    #define PR_EXCL         0x80
+    */
+    /*
+    ** File modes ....
+    **
+    ** CAVEAT: 'mode' is currently only applicable on UNIX platforms.
+    ** The 'mode' argument may be ignored by PR_Open on other platforms.
+    **
+    **   00400   Read by owner.
+    **   00200   Write by owner.
+    **   00100   Execute (search if a directory) by owner.
+    **   00040   Read by group.
+    **   00020   Write by group.
+    **   00010   Execute by group.
+    **   00004   Read by others.
+    **   00002   Write by others
+    **   00001   Execute by others.
+    **
+    */
+
+    outputStream.init( file, 0x04 | 0x08 | 0x20, 420, 0 );
+
+    var unicodeConverter = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
+    unicodeConverter.charset = "utf-8";
+    str = unicodeConverter.ConvertFromUnicode(str);
+
+    str = "ï»¿" + str; // first three bytes of the file to indicate UTF-8 format ("\xEF\xBB\xBF")
+
+    var result = outputStream.write(str, str.length );
+    outputStream.close();
+    result = true;
+  } catch (e) {
+    alert("The file has NOT been saved.");
+    result = false;
+  }
+  return result;
+}
+
+
+// -----------------------------------------------------------------------------
+function SaveFileInIE(str, filename)
+{
+
+  // IE will its own content for everything before the BODY tag. So put CSS section after that tag
+  str_lower_case = str.toLowerCase();
+  ind1 = str_lower_case.indexOf("<" + "style");  // use "+" to exempt this line from search
+  ind2 = str_lower_case.indexOf("</" + "head>");
+  if (ind2 > ind1) // if CSS section is in within HEAD tag
+  {
+    ind3 = str_lower_case.indexOf("</" + "style>");
+    len3 = ("</" + "style>").length + 2; // +2 because of \r\n in IE
+    ind4 = str_lower_case.indexOf("<" + "body>");
+    len4 = ("<" + "body>").length;
+    new_str = str.substring(0, ind1) + str.substring(ind3 + len3, ind4 + len4);//cut CSS from HEAD section
+    new_str += str.substring(ind1, ind3 + len3); // put CSS section after BODY tag
+    new_str += str.substring(ind4 + len4, str.length); // add rest of file
+    str = new_str;
+  }; // if
+
+  var d = window.frames.w.document;
+  d.open( 'text/plain', 'replace' );
+  d.charset = "utf-8";
+
+  if (filename.match(/.*\.txt/))
+  {
+    d.write(str);
+    d.close();
+  } else
+  {
+    d.close();
+    d.body.innerHTML = str;
+  }; // if
+
+  if(d.execCommand("SaveAs", null, filename))
+  {
+    window.status = "The file has been saved at " + (new Date).getHours() + ":" + (new Date).getMinutes();
+    result = true;
+  } else
+  {
+    window.alert("The file has NOT been saved.");
+    result = false;
+  }; // if
+  return result;
+}
+
+
+// -----------------------------------------------------------------------------
+function SaveFile(str, filename)
+{
+  if (filename_postfix != "")
+  {
+    filename = filename.replace(/(.*)\./, "$1_" + filename_postfix + ".");
+  }; // if
+
+  if (document.all) result = SaveFileInIE(str, filename);
+  else result = SaveFileInFF(str, filename);
+
+  if (result == true && filename_postfix == "") ShowTitleWithoutAsteric();
+}
+
+
+// -----------------------------------------------------------------------------
+function PreSaveAction()
+{
+  if (import_data_text_area_changed == true) // "Process Data" button has to be pressed
+  {
+    if (!confirm("You changed Import Data textarea but didn't press 'Process Data' button. Data can be lost.\n"+
+          "Do you want to proceed anyway?")) return;
+    import_data_text_area_changed = false;
+  }; // if
+
+  if (document.all) document.getElementById("web_browser").value = "IE";
+  else document.getElementById("web_browser").value = "FF";
+
+  document.getElementById("textarea_span").style.display = "none";
+  document.getElementById("show_hide_textarea_button").value = "Import data";
+}
+
+
+// -----------------------------------------------------------------------------
+function PreSaveAction2(str)
+{
+  //Make visible only message "Loading.." until file is fully loaded by web browser.
+
+  str_loading_message_regexp = new RegExp("<" + "span[^>]*loading_message[^>]*>", "i"); // use +
+  str = str.replace(str_loading_message_regexp, "<" + "span id='loading_message'>");
+
+  str_all_visible_area_regexp = new RegExp("<" + "span[^>]*all_visible_area[^>]*>", "i");
+  str = str.replace(str_all_visible_area_regexp, "<" + "span id='all_visible_area' " +
+                    "style='display:none'>");
+  return str;
+}
+
+
+// -----------------------------------------------------------------------------
+function PostSaveAction()
+{
+  if (!document.all) document.getElementById("short_long_textarea_button").style.display = "";
+}
+
+// -----------------------------------------------------------------------------
+function SaveAsWithText()
+{
+  PreSaveAction();
+
+  document.getElementById("textarea").value = PrepareStringOfDataForExport();
+  // in FF textarea.value won't be reflected in innerHTML
+  if (!document.all) // in IE textarea.innerHTML won't parse "end of line" characters (needs <BR>)
+    document.getElementById("textarea").innerHTML = document.getElementById("textarea").value;
+
+  // remove menu
+  var menu_items_str = document.getElementById("menu_items").innerHTML;
+  document.getElementById("menu_items").innerHTML ="";
+  var menu_display_status = document.getElementById("menu").style.display;
+  document.getElementById("menu").style.display = "none";
+
+  // removing chain of tables from the string that will be saved into a file.
+  var str = document.documentElement.innerHTML;
+  var str_lower_case = str.toLowerCase();
+  var ind1 = str_lower_case.lastIndexOf("<div");
+  var ind2 = str_lower_case.indexOf('</div>', ind1);
+  var len =  str_lower_case.indexOf('>', ind1) - ind1 + 1;
+  var new_str = str.substr(0, ind1 + len) + str.substring(ind2, str.length);
+
+  // restore menu
+  document.getElementById("menu_items").innerHTML = menu_items_str;
+  document.getElementById("menu").style.display = menu_display_status;
+
+  new_str = PreSaveAction2(new_str);
+
+  SaveFile(new_str, document.URL);
+
+  PostSaveAction();
+}
+
+
+// -----------------------------------------------------------------------------
+function SaveAsWithTables()
+{
+  PreSaveAction();
+
+  document.getElementById("textarea").value = "";
+  // in FF textarea.value won't be reflected in innerHTML
+  if (!document.all) // in IE textarea.innerHTML won't parse "end of line" characters (needs <BR>)
+    document.getElementById("textarea").innerHTML = document.getElementById("textarea").value;
+
+  if (filename_postfix != "")
+  {
+    // remove menu
+    var menu_items_str = document.getElementById("menu_items").innerHTML;
+    document.getElementById("menu_items").innerHTML ="";
+    var menu_display_status = document.getElementById("menu").style.display;
+    document.getElementById("menu").style.display = "none";
+  }; // if
+
+  var str = document.documentElement.innerHTML;
+
+  if (filename_postfix != "")
+  {
+    // restore menu
+    document.getElementById("menu_items").innerHTML = menu_items_str;
+    document.getElementById("menu").style.display = menu_display_status;
+  }; // if
+
+  str = PreSaveAction2(str);
+
+  SaveFile(str, document.URL);
+
+  PostSaveAction();
+}
+
+
+// -----------------------------------------------------------------------------
+function ExportData()
+{
+  var filename = document.URL;
+  SaveFile(PrepareStringOfDataForExport(), filename.replace(/(.*)\.html?/, "$1.txt"));
+}
+
+
+// -----------------------------------------------------------------------------
+function GetNumberOfTheMonth(month_name)
+{
+  var month_number;
+  switch (month_name.toUpperCase())
+  {
+    case "JAN" : month_number = 0; break;
+    case "FEB" : month_number = 1; break;
+    case "MAR" : month_number = 2; break;
+    case "APR" : month_number = 3; break;
+    case "MAY" : month_number = 4; break;
+    case "JUN" : month_number = 5; break;
+    case "JUL" : month_number = 6; break;
+    case "AUG" : month_number = 7; break;
+    case "SEP" : month_number = 8; break;
+    case "OCT" : month_number = 9; break;
+    case "NOV" : month_number = 10; break;
+    case "DEC" : month_number = 11; break;
+  }; // switch
+  return month_number;
+}
+
+
+// -----------------------------------------------------------------------------
+function GetNameOfTheMonth(month)
+{
+  return document.getElementById("month").options[month].text;
+}
+
+
+// -----------------------------------------------------------------------------
+function GetDayOfTheWeek(day_number)
+{
+  var day_of_the_week = "";
+
+  switch (day_number)
+  {
+    case 0 : day_of_the_week = "Sun"; break;
+    case 1 : day_of_the_week = "Mon"; break;
+    case 2 : day_of_the_week = "Tue"; break;
+    case 3 : day_of_the_week = "Wed"; break;
+    case 4 : day_of_the_week = "Thu"; break;
+    case 5 : day_of_the_week = "Fri"; break;
+    case 6 : day_of_the_week = "Sat"; break;
+  }; // switch
+
+  return day_of_the_week;
+}
+
+
+// -----------------------------------------------------------------------------
+function GetLastDateOfMonth(month, year)
+{
+  var last_date_of_month;
+
+  switch (month)
+  {
+    case 8 :
+    case 3 :
+    case 5 :
+    case 10: last_date_of_month = 30; break; // September, April, June, November
+
+    case 0:
+    case 2:
+    case 4:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+    case 11 : last_date_of_month = 31; break;
+
+    default: if (year % 400 == 0) last_date_of_month = 29; // leap year
+             else if (year % 100 == 0) last_date_of_month = 28; // common year
+                  else if (year % 4 == 0) last_date_of_month = 29; // leap year
+                       else last_date_of_month = 28; // common year
+             break;
+  }; // switch
+
+  return last_date_of_month;
+}
+
+
+// -----------------------------------------------------------------------------
+// taken from http://irt.org/script/914.htm
+function GetWeek(year,month,date) {
+    var when = new Date(year,month,date);
+    var newYear = new Date(year,0,1);
+    var offset = 7 + 1 - newYear.getDay();
+    if (offset == 8) offset = 1;
+    var daynum = ((Date.UTC(year,when.getMonth(),when.getDate(),0,0,0) - Date.UTC(year,0,1,0,0,0)) /1000/60/60/24) + 1;
+    var weeknum = Math.floor((daynum-offset+7)/7);
+    if (weeknum == 0) {
+        year--;
+        var prevNewYear = new Date(year,0,1);
+        var prevOffset = 7 + 1 - prevNewYear.getDay();
+        if (prevOffset == 2 || prevOffset == 8) weeknum = 53; else weeknum = 52;
+    }
+    return weeknum;
+}
+
+
+  // class names for CSS
+  var color1_class = "n"; // navy "#000080"
+  var color2_class = "r";  // red "#ff0000"
+  var color2_last_column_class = "l";  // red "#ff0000" (last column, width has to be set up bigger)
+  var week_number_class = "b"; // black
+  var bgcolor1_class = "s"; // silver "#c0c0c0"
+  var bgcolor1_border_class = "sb"; // silver "#c0c0c0"
+  var bgcolor2_class = "w"; // white
+  var bgcolor2_border_class = "wb"; // white
+  var inline_class = "i"; // class for <h> attribute
+
+  var bgcolor2 = "white"; // color for <table> attribute
+  var bgcolor1 = "silver"; // color for <table> attribute
+
+
+// -----------------------------------------------------------------------------
+function SetBackgroundColor()
+{
+  var table = FirstChild(document.getElementById("calendar_field"));
+  var i = 0;
+  while(table)
+  {
+    if (i % 2 == 0) table.style.backgroundColor = bgcolor1;
+    else table.style.backgroundColor = bgcolor2;
+
+    textarea_array = table.getElementsByTagName("textarea");
+    for (var j = 0; j < textarea_array.length; j++)
+    {
+      textarea_array[j].className = (table.style.backgroundColor == bgcolor1 ? "s" : "w");
+    }; // for
+    i++;
+    table = NextSibling(table);
+  }; // while
+}
+
+
+// -----------------------------------------------------------------------------
+// Adding two lines. One with the month name and a year. Another with names of days of the week.
+// tbody has to be created before.
+function AddMonthHeader(month, year, tbody) // month is in the standard of Date object
+{
+  // first row of the table (with the name of the month and a year)
+  var first_row = document.createElement("tr");
+  var cell_of_first_row = document.createElement("td");
+  cell_of_first_row.colSpan = 8;
+  cell_of_first_row.setAttribute("align", "center");
+  cell_of_first_row.style.color = "navy";
+  var cell_text_style =  document.createElement("h1");
+  var cell_text = document.createTextNode(GetNameOfTheMonth(month) + " " + year);
+
+  cell_text_style.appendChild(cell_text);
+  cell_of_first_row.appendChild(cell_text_style);
+  first_row.appendChild(cell_of_first_row);
+  tbody.appendChild(first_row);
+
+  // second row of the table (with the names of the days of the week)
+  var second_row = document.createElement("tr");
+  cell = document.createElement("td");
+  cell.className = color1_class;
+  cell.style.width = "3%";
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode("#");
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color2_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(0));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color1_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(1));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color1_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(2));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color1_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(3));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color1_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(4));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color1_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(5));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  cell = document.createElement("td");
+  cell.className = color2_last_column_class;
+  h2 = document.createElement("h2");
+  cell_text = document.createTextNode(GetDayOfTheWeek(6));
+  h2.appendChild(cell_text);
+  cell.appendChild(h2);
+  second_row.appendChild(cell);
+
+  tbody.appendChild(second_row);
+}
+
+
+// -----------------------------------------------------------------------------
+// Return: table object that was created
+function AddMonthTable(month, year) // month is in the standard of Date object
+{
+
+  var table = document.createElement("table");
+  table.id = year + ((month>9) ? month : "0" + month);
+  table.setAttribute("width", "100%");
+  table.setAttribute("border", "1");
+  table.setAttribute("borderColor", "black");
+  table.style.borderCollapse = "collapse";
+
+  var tbody = document.createElement("tbody");
+
+  AddMonthHeader(month, year, tbody);
+
+  var last_date_of_month = new Date();
+  last_date_of_month.setYear(year);
+  last_date_of_month.setMonth(month);
+  last_date_of_month.setDate(GetLastDateOfMonth(month, year));
+  var date_counter = GetLastDateOfMonth(month, year); 
+  // adding regular line to the month
+
+  var row, cell, cell_text;
+  
+  while (date_counter >= 1)
+  {
+    row = document.createElement("tr");
+    cell = document.createElement("td");
+    cell.className = week_number_class;
+    h2 = document.createElement("h2");
+    cell_text = document.createTextNode(GetWeek(year, month, date_counter));
+    h2.appendChild(cell_text);
+    cell.appendChild(h2);
+    row.appendChild(cell);
+  
+    for (var i = 6; i >= 0; i--)
+    {
+      cell = document.createElement("td");
+      if (i == 0 || i == 6)
+      {
+        cell.className = color2_class;
+      } else
+      {
+        cell.className = color1_class;
+      }; // if
+      h2 = document.createElement("h2");
+
+      if ( (date_counter == GetLastDateOfMonth(month, year) && i > last_date_of_month.getDay()) ||
+           date_counter < 1 )
+      {
+        cell_text = document.createTextNode("\u00a0"); // non-breaking space
+      }else
+      {
+        cell_text = document.createTextNode(date_counter);
+        date_counter--;
+      }; // if
+      h2.appendChild(cell_text)
+      cell.appendChild(h2);
+      row.insertBefore(cell, row.firstChild.nextSibling); // first cell is a week number
+    }; // for
+  
+    tbody.appendChild(row);
+  }; // while
+
+  table.appendChild(tbody);
+  return table;
+}
+
+
+// -----------------------------------------------------------------------------
+// Return: reference to a table that was newly created or already existed
+function AddMonth(month, year) // month is in the standard of Date object
+{
+  // Find a place in the chain of existent tables where we should insert this table
+  var table = FirstChild(document.getElementById("calendar_field"));
+  var insert_before_this_table;
+  var id_of_new_table = year + ((month>9) ? month : "0" + month);
+  while(table)
+  {
+    if (id_of_new_table >= table.id) 
+    {
+      insert_before_this_table = table;
+      break;
+    }; // if
+    table = table.nextSibling;
+  }; // while
+
+  if (insert_before_this_table && id_of_new_table == insert_before_this_table.id) 
+  {
+    // This month has been already inserted
+    new_table = insert_before_this_table;
+  }else
+  {
+    new_table = AddMonthTable(month, year);
+    if (insert_before_this_table)
+    {
+      document.getElementById("calendar_field").insertBefore(new_table, insert_before_this_table);
+    }else
+    {
+      document.getElementById("calendar_field").appendChild(new_table);
+    }; // if
+  }; // if
+  return new_table;
+}
+
+
+// browser dependant TEXTAREA length and width because of bugzilla #33654
+var TA_length;
+var TA_width;
+var IE_TA_length = 13;
+var IE_TA_width = 2;
+var FF_TA_length = 10;
+var FF_TA_long_length = 14;
+var FF_TA_width = 2;
+// -----------------------------------------------------------------------------
+// Return: reference to created TEXTAREA object
+function CreateTextArea()
+{
+  var text_area = document.createElement("textarea");
+  text_area.cols = TA_length;
+  text_area.rows = TA_width;
+  text_area.onblur = function(event) {On_Blur(event);}
+  text_area.onfocus = function(event) {OnFocus(event);}
+  
+  return text_area;
+}
+
+
+// -----------------------------------------------------------------------------
+function OnClick(ff_event)
+{
+  var srcElement = document.all ? event.srcElement : ff_event.target; // former for IE, latter for FF
+  window.status = "Mouse click " + + (new Date).getHours() + ":" + (new Date).getMinutes()
+   + ":" + (new Date).getSeconds() + " " + srcElement.tagName;
+  var cell;
+
+  switch (srcElement.tagName)
+  {
+    case "TD" : cell = srcElement; break;
+    case "H2" :
+    case "TEXTAREA" : cell = srcElement.parentNode; break;
+  }; // switch
+  if (cell && cell.lastChild.tagName != "TEXTAREA")
+  {
+    // second firstChild is a text that's why we use DOM property instead of our function
+    if (!isNaN(FirstChild(cell).firstChild.nodeValue) &&
+        FirstChild(cell).firstChild.nodeValue != "\u00a0" && cell.className != week_number_class)
+    {
+      FirstChild(cell).className = inline_class; // "display:inline"
+      text_area = CreateTextArea();
+      text_area.className =
+          (cell.parentNode.parentNode.parentNode.style.backgroundColor == bgcolor1 ? 
+           bgcolor1_border_class : bgcolor2_border_class);
+      cell.appendChild(text_area);
+      text_area.focus();
+    }; // if
+  }else if (cell && cell.lastChild.tagName == "TEXTAREA")
+  {
+      text_area = cell.lastChild;
+      text_area.className = 
+          (cell.parentNode.parentNode.parentNode.style.backgroundColor == bgcolor1 ? 
+           bgcolor1_border_class : bgcolor2_border_class);
+  }; // if
+}
+
+
+var import_data_text_area_changed = false;
+
+// -----------------------------------------------------------------------------
+function OnKeyDown(ff_event)
+{
+  var srcElement = document.all ? event.srcElement : ff_event.target; // former for IE, latter for FF
+  if (srcElement.tagName == "TEXTAREA")
+  {
+    var keycode = document.all ? event.keyCode : ff_event.which;
+
+    // 45 - insert
+    if (keycode == 45) return;
+
+    // 33 - page up, 34 - page down, 35 - end, 36 - home, 37 - lef, 38 - up, 39 - right, 40 - down
+    if (keycode >= 33 && keycode <= 40) return;
+
+    // 27 - esc
+    if (keycode == 27) return;
+
+    // 16 - shift, 17 - ctrl, 18 - alt
+    if (keycode >= 16 && keycode <= 18) return;
+
+    // 9 - tab
+    if (keycode == 9) return;
+
+    ShowTitleWithAsteric();
+    if (srcElement.id == "textarea") // if it's textarea for importing data (where you have to press
+    {                                // "Process Data" button)
+        import_data_text_area_changed = true; // when "Save.." button is pressed "Process Data" 
+                                              // button will be asked to be pressed as well
+    }; // if
+  }; // if
+}
+
+
+// -----------------------------------------------------------------------------
+function OnFocus(ff_event)
+{
+  var text_area = document.all ? event.srcElement : ff_event.target; // former for IE, latter for FF
+
+  // OnFocus can be called after OnClick, so className will be already either "sb" or "wb"
+  switch (text_area.className)
+  {
+    case bgcolor1_class : text_area.className = bgcolor1_border_class; break;
+    case bgcolor2_class : text_area.className = bgcolor2_border_class; break;
+  }; // switch
+}
+
+
+// -----------------------------------------------------------------------------
+function On_Blur(ff_event)
+{
+    var srcElement = document.all ? event.srcElement : ff_event.target; // former for IE, latter for FF
+
+    if (srcElement.tagName == "TEXTAREA")
+    {
+      var text_area = srcElement;
+      if (text_area.value != "")
+      {
+        switch (text_area.className)
+        {
+          case bgcolor1_border_class : text_area.className = bgcolor1_class; break;
+          case bgcolor2_border_class : text_area.className = bgcolor2_class; break;
+        }; // switch
+        text_area.innerHTML = text_area.value; // property ".value" has some problems in FF
+      }else
+      {
+        FirstChild(text_area.parentNode).className = ""; // delete "inline" tag
+        text_area.parentNode.removeChild(text_area);
+      }; // if
+    }; // if
+}
+
+
+// -----------------------------------------------------------------------------
+// Return: string of multiline data.
+function PrepareStringOfDataForExport()
+{
+  var data_to_export = "";
+
+  if (filename_postfix == "")
+  { // filter wasn't used so menu items should be saved into file
+    // parsing menu items
+    var menu_items_str = document.getElementById("menu_items").innerHTML;
+    if (menu_items_str != "")
+    {
+      var menu_items_array = menu_items_str.split(/<br></i); // if just /<br>/,FF won't work
+      for (var i = 0; i < menu_items_array.length; i++)
+      {
+        // if file saved in IE and then opened in FF there can be extra spaces and '\n' characters
+        menu_items_array[i] = menu_items_array[i].replace(/\s+/g, " ");
+        menu_items_array[i].match(/,\s*'(.*)'\).*>(.*)<\/a>/i);
+        data_to_export += "#" + RegExp.$2 + " : " + RegExp.$1 + "\r\n";
+      }; // for
+    }; // if
+  }; // if
+
+  // parsing tables
+  var week_number = -1;
+
+  var row_array = document.getElementById("calendar_field").getElementsByTagName("tr");
+  for (j = 0; j < row_array.length; j++)
+  {
+    textarea_array = row_array[j].getElementsByTagName("textarea");
+    for (i = textarea_array.length-1; i >= 0; i--) // the latest records should be first
+    {
+      var month_date = FirstChild(textarea_array[i].parentNode).firstChild.nodeValue;
+      var table = textarea_array[i].parentNode.parentNode.parentNode.parentNode; //TABLE-TBODY-TR-TD-TA
+      var table_year = table.id.substr(0,4);
+      var table_month = table.id.substr(4,2);
+      var full_date = new Date(table_year, table_month, month_date);
+
+      if (week_number != GetWeek(table_year, table_month, month_date))
+      {
+        week_number = GetWeek(table_year, table_month, month_date);
+        data_to_export += "\r\n"; // separate weeks by an empty line
+      }; // if
+      month_date = month_date > 9 ? month_date : "0" + month_date;
+      data_to_export += GetDayOfTheWeek(full_date.getDay()) + " " + month_date + " " + 
+                        GetNameOfTheMonth(parseInt(table_month, 10)).substr(0,3) + " " + 
+                        table_year + " - " + textarea_array[i].value + "\r\n";
+    }; // for
+  }; // for
+
+  return data_to_export;
+}
+
+
+// -----------------------------------------------------------------------------
+function TextareaButton()
+{
+  if (document.getElementById("textarea_span").style.display != "")
+  { // make textarea visible
+    document.getElementById("textarea_span").style.display = "";
+    document.getElementById("textarea").focus();
+    document.getElementById("show_hide_textarea_button").value = "Hide textarea";
+  } else
+  {
+    document.getElementById("textarea_span").style.display = "none";
+    document.getElementById("show_hide_textarea_button").value = "Import data";
+  }; // if
+}
+
+
+// -----------------------------------------------------------------------------
+function FirstChild(node)
+{
+  first_child = node.firstChild;
+  if (first_child && first_child.nodeType != 1) // 1 - element node, 3 - text node
+  { // in FF a new line is considered as #text object. A new line will appear if table is saved in IE
+    first_child = first_child.nextSibling;
+  }; // if
+  return first_child;
+}
+
+
+// -----------------------------------------------------------------------------
+function NextSibling(node)
+{
+  next_sibling = node.nextSibling;
+  if (next_sibling && next_sibling.nodeType != 1) // 1 - element node, 3 - text node
+  { // in FF a new line is considered as #text object. A new line will appear if table is saved in IE
+    next_sibling = next_sibling.nextSibling;
+  }; // if
+  return next_sibling;
+}
+
+
+var main_calendar_field_obj = null;
+var filtered_dates = null; // to store dates of events that match filter
+var menu_items_str = "";
+var filename_postfix = "";
+// -----------------------------------------------------------------------------
+function Filter(filename_postfix_str, filter_str)
+{
+  var parent_node;
+  var current_calendar_field_obj;
+
+  if (filter_str == "")
+  { // no filter. Return to original tables
+    filename_postfix = "";
+
+    current_calendar_field_obj = document.getElementById("calendar_field");
+    parent_node = current_calendar_field_obj.parentNode;
+    parent_node.replaceChild(main_calendar_field_obj, current_calendar_field_obj);
+
+    // remove line showing how many items matched filter
+    document.getElementById("number_of_items_matched_filter").style.display = "none";
+    
+    filtered_dates = null; // this will prevent showing diagram when "Stat" button will be pressed without filter first
+    HideHistogram();
+    
+    // switch from "read-only" mode into "read-write" mode
+    var array_of_buttons = document.getElementsByTagName("button");
+    for (var i = 0; i <= array_of_buttons.length - 1; i++) array_of_buttons[i].disabled = false;
+    document.getElementById("calendar_field").onclick = function(event) {OnClick(event);}
+    
+    // disable "Graph" button
+    document.getElementById("graph_button").disabled = true;
+  
+    // delete "No Filter" item from menu
+    document.getElementById("menu_items").innerHTML = menu_items_str;
+  } else
+  { // filter is chosen. Show new tables
+    filename_postfix = filename_postfix_str.replace(/\s/g, "_");
+
+    var key_words_array = filter_str.split(/\s*,\s*/);
+
+    current_calendar_field_obj = document.getElementById("calendar_field");
+    if (!main_calendar_field_obj)
+    {
+      main_calendar_field_obj = current_calendar_field_obj;
+    }; // if
+
+    var new_calendar_field_obj = main_calendar_field_obj.cloneNode(true);
+
+    // going through the TEXTAREAs
+    textarea_array = new_calendar_field_obj.getElementsByTagName("textarea");
+    filtered_dates = new Array();
+    var i = 0;
+    while (i < textarea_array.length)
+    {
+      var new_text_area_str = "";
+      for (var j = 0; j < key_words_array.length; j++)
+      {
+        var reg_exp = new RegExp("([^,;\.\\s]+\\s+)*\\b" + key_words_array[j] + 
+                                 "\\b[^,;]*(,\\s*[^a-zA-Z,;\\s]+)*", "ig");
+        while ((match_result = reg_exp.exec(textarea_array[i].value)) != undefined)
+        {
+          new_text_area_str += (new_text_area_str == "" ? "" : "; ") + match_result[0];
+        }; // while
+      }; // for
+      if (new_text_area_str != "")
+      {
+        textarea_array[i].innerHTML = new_text_area_str;  // in FF textarea.value won't be reflected 
+                                                          // in innerHTML (for 'Save with Tables')
+        // get date of filtered event
+        var day = textarea_array[i].previousSibling.innerHTML;
+        var month_table = textarea_array[i].parentNode/*cell*/.parentNode/*week row*/.parentNode/*month table*/;
+          //firstChild/*row with month name*/.firstChild/*cell with month name*/.firstChild/*h tag with month name*/.innerHTML;
+        var month_year = FirstChild( FirstChild( FirstChild(month_table) ) ).innerHTML; // TABLE-TR-TD-H2
+        var cell_date = new Date(day + " " + month_year);
+        filtered_dates.push(cell_date);
+
+        i++;
+      } else
+      {
+        textarea_array[i].parentNode.removeChild(textarea_array[i]);
+        //the element will be automatically removed from array , so no increase of i
+      }; // if
+    }; // for
+
+    var parent_node = current_calendar_field_obj.parentNode;
+    parent_node.replaceChild(new_calendar_field_obj, current_calendar_field_obj);
+
+    // show how many items matched filter
+    document.getElementById("number_of_items_matched_filter").innerHTML = 'Found items "' + filter_str + '": ' + i;
+    document.getElementById("number_of_items_matched_filter").style.display = "block";
+  
+    // if histogram area is shown then redisplay histogram for new data
+    if (document.getElementById("histogram_area").style.display == "block")
+    {
+      BuildHistrogram();
+    }
+    
+    // switch into "read-only" mode
+    var array_of_buttons = document.getElementsByTagName("button");
+    for (var i = 0; i <= array_of_buttons.length - 1; i++) array_of_buttons[i].disabled = true;
+    document.getElementById("calendar_field").onclick = null;
+
+    // enable "Graph" button
+    document.getElementById("graph_button").disabled = false;
+    
+    // add "No Filter" item into menu
+    if (menu_items_str == "")
+    { // menu is taken from .html file. ProcessData() hasn't been launched.
+      menu_items_str = document.getElementById("menu_items").innerHTML;
+    }; // if
+    document.getElementById("menu_items").innerHTML = menu_items_str + 
+        "<hr><a href = \"javascript:Filter(\'\',\'\');\">No Filter</a><br>";
+  }; // if
+
+  HideMenu();
+}
+
+
+// -----------------------------------------------------------------------------
+function ProcessData() // from textarea into tables
+{
+  var textarea_text = document.getElementById("textarea").value;
+
+  document.getElementById("calendar_field").style.display = "none";
+
+  var index1 = 0;
+
+  // parsing whole text for menu items (marked by # symbol)
+  var match_array = textarea_text.match(/\s*#\s*[^:]*\s*:\s*[^\n]*/g);
+  if (match_array)
+  {
+    menu_items_str = "";
+    for (var i = 0; i < match_array.length; i++)
+    {
+      // parsing one line. In IE the string is terminated with 13(\r), 10(\n) codes. In Mozilla with 10.
+      // We cut 10 in above match. So in IE line has extra code 13.
+      match_array[i].match(/\s*#\s*([^:]*?)\s*:\s*([^\r]*)/); // "?" means use non-greedy algorithm
+      menu_items_str += "<a href = \"javascript:Filter(\'" + RegExp.$1 + "\',\'" + 
+                         RegExp.$2 + "\');\">" + RegExp.$1 + "</a><br>";
+    }; // for
+
+    document.getElementById("menu_items").innerHTML = menu_items_str;
+    document.getElementById("menu").style.display = "";
+  } else
+  {
+    document.getElementById("menu_items").innerHTML = "";
+    document.getElementById("menu").style.display = "none";
+  }; // if
+
+
+  while (index1 < textarea_text.length)
+  {
+    var index2 = textarea_text.indexOf('\n', index1);
+    index2 = index2 == -1 ? textarea_text.length : index2;
+    var textarea_str = textarea_text.substring(index1, index2); // don't copy '\n'
+    index1 = index2+1; // prepare for the next loop cycle
+
+    // parsing one line. In IE the string is terminated with 13(\r), 10(\n) codes. In Mozilla with 10.
+    // We cut 10 in substring() function. So in IE line has extra code 13.
+
+    match_array = textarea_str.match(/(\d{1,2})\s*([a-zA-Z]{3})\s*(\d{4})\s*-\s([^\r]*)/);
+    if (!match_array) {continue;}
+
+    var month_date = RegExp.$1;
+    var month = GetNumberOfTheMonth(RegExp.$2);
+    var year = RegExp.$3;
+    calendar_entry = RegExp.$4;
+
+    _date = new Date(year, month, month_date);
+    if (_date.getFullYear() == year && _date.getMonth() == month && 
+        _date.getDate() == month_date)
+    {
+      var table = AddMonth(month, year);
+      // finding cell in the month table
+      row = NextSibling(NextSibling(FirstChild(FirstChild(table)))); // skip two head rows
+      while (row)
+      {
+        cell = NextSibling(FirstChild(row)); // skip first cell in a row (with week number)
+        while (cell)
+        {
+          // second firstChild is a text that's why we use DOM property instead of our function
+          text = FirstChild(cell).firstChild;
+          if (parseInt(text.nodeValue, 10) == parseInt(month_date, 10) && 
+              cell.className != week_number_class)
+          {
+            // inserting calendar data
+            if (cell.lastChild.tagName != "TEXTAREA")
+            {
+              FirstChild(cell).className = inline_class; // "display: inline"
+              text_area = CreateTextArea();
+              cell.appendChild(text_area);
+            } else
+            {
+              text_area = cell.lastChild;
+            }; // if
+            text_area.value = calendar_entry; //in FF ".value" won't be shown in documentElement.innerHTML
+            text_area.innerHTML = text_area.value; //in FF ".innerHTML" 2nd time change won't be visible
+
+            cell = cell.parentNode.lastChild;
+            row = row.parentNode.lastChild;
+          }; // if
+          cell = NextSibling(cell);
+        }; // while
+        row = NextSibling(row);
+      }; // while
+    } else {window.alert("Incorrect Date Format for string:" + textarea_str);}
+
+  }; // while
+
+  SetBackgroundColor();
+
+  document.getElementById("calendar_field").style.display = "";
+  import_data_text_area_changed = false; // when "Save.." button is pressed "Process Data" button won't
+                                         // be asked to be pressed
+}
+
+
+var head_menu_without_href_str = 'Filters';
+var head_menu_with_href_str = '<a href = "javascript:;">' + 'Filters' + '</a>';
+
+// -----------------------------------------------------------------------------
+function ShowMenu()
+{
+  document.getElementById("menu_items").style.display = "";
+  document.getElementById("menu").style.backgroundColor = "black";
+  document.getElementById("head_menu").innerHTML = head_menu_without_href_str;
+  document.getElementById("head_menu").style.backgroundColor = "blue";
+  document.getElementById("head_menu").style.color = "white";
+}
+
+
+// -----------------------------------------------------------------------------
+function HideMenu()
+{
+  document.getElementById("menu_items").style.display = "none";
+  document.getElementById("menu").style.backgroundColor = "white";
+  document.getElementById("head_menu").innerHTML = head_menu_with_href_str;
+  document.getElementById("head_menu").style.backgroundColor = "";
+  document.getElementById("head_menu").style.color = "";
+}
+
+
+// -----------------------------------------------------------------------------
+function ShortLongTextareaButton()
+{
+    if (document.getElementById("FF_TA_cols").value == "short")
+    {
+      TA_length = FF_TA_long_length;
+      document.getElementById("FF_TA_cols").value = "long";
+      document.getElementById("short_long_textarea_button").value = "Switch to short TEXTAREA";
+    } else
+    {
+      TA_length = FF_TA_length;
+      document.getElementById("FF_TA_cols").value = "short";
+      document.getElementById("short_long_textarea_button").value = "Switch to long TEXTAREA";
+    }; // if
+
+    textarea_array = document.getElementById("calendar_field").getElementsByTagName("textarea");
+    for (var i = 0; i < textarea_array.length; i++)
+    {
+      textarea_array[i].cols = TA_length;
+    }; // for
+}
+
+// -----------------------------------------------------------------------------
+function ShowHistogram()
+{
+
+  if (document.getElementById("histogram_area").style.display == "block")
+  {
+    HideHistogram();
+  } else
+  {
+    if (filtered_dates == null) return;
+    
+    document.getElementById("space_holder").style.display = "block"; // shift calendar area down since histogram has 
+                                                                     // ablsolute position
+    document.getElementById("histogram_area").style.display = "block";
+  
+    BuildHistrogram();
+  }
+}
+
+// -----------------------------------------------------------------------------
+function BuildHistrogram()
+{
+  var histogramType = "monthly";
+  var histogramTypes = document.getElementsByName("histogram_type");
+//console.log(histogramTypes);return;
+  for (var i = 0; i< histogramTypes.length; i++)
+  {
+    if (histogramTypes[i].checked == true) histogramType = histogramTypes[i].value;
+  }
+  
+  Histogram.display(filtered_dates, histogramType, "histogram_graph", true);
+}
+
+// -----------------------------------------------------------------------------
+function HideHistogram()
+{
+    document.getElementById("histogram_area").style.display = "none";
+    document.getElementById("histogram_graph").innerHTML = "";
+    document.getElementById("space_holder").style.display = "none";
+}
+
+</script>
+
+<script>
+  /* Author: Vitaly Spirin
+      18 Jan 2013 - implemented histrogram for years
+      26 Apr 2013 - implemented histrogram for months
+  */
+  
+  var Histogram =
+  {
+    histogramType : null,
+    histogramArea : null,
+    dates         : null,
+    yearValues    : null,
+    monthValues   : null,
+    xAxisElements : null,
+    barColor      : "#DEB887",
+    yAxisWidth    : null,
+    xAxisHeight   : null,
+    heightOfYUnit : null,
+    borderWidth   : 1,
+    
+    // ----------------------------------------------
+    display : function(dates, type, divElementId, showValuesInBars, barColor)
+    {
+      if ( document.getElementById(divElementId) == null ) return;
+      
+      this.initializeProperties(dates, type, divElementId, barColor);
+      
+      var minDate = this.dates[0];
+      var maxDate = this.dates[dates.length - 1];
+      
+      this.buildHistogram(showValuesInBars);
+      this.buildXAxis();
+      this.buildYAxis();
+      
+    },
+
+    // ----------------------------------------------
+    initializeProperties  : function(dates, type, divElementId, barColor)
+    {
+      this.histogramType = type;
+      
+      this.histogramArea = document.getElementById(divElementId);
+      this.histogramArea.innerHTML = ''; // clear histogram area
+      this.histogramArea.paddingLeft = parseInt(window.getComputedStyle(this.histogramArea, null).paddingLeft);
+      this.histogramArea.paddingRight = parseInt(window.getComputedStyle(this.histogramArea, null).paddingRight);
+      
+      this.histogramArea.paddingTop = parseInt(window.getComputedStyle(this.histogramArea, null).paddingTop);
+      this.histogramArea.paddingBottom = parseInt(window.getComputedStyle(this.histogramArea, null).paddingBottom);
+      
+      this.histogramArea.widthWithoutPadding = this.histogramArea.clientWidth - this.histogramArea.paddingLeft - this.histogramArea.paddingRight;
+      this.histogramArea.heightWithoutPadding = this.histogramArea.clientHeight - this.histogramArea.paddingTop - this.histogramArea.paddingBottom;
+
+
+      dates.sort( function(date1, date2) {return date1 - date2;} );
+      this.dates = dates;
+
+      switch (this.histogramType)
+      {      
+        case  "annually":   this.initializeYearValues();
+                            break;
+        case  "monthly" :   this.initializeMonthValues();
+                            break;
+      }
+      
+      var element = this.createGraphicElement(0, 0, null, null, "XX");
+      element.style.color = "white";
+      this.histogramArea.appendChild(element);
+      this.yAxisWidth = element.clientWidth;
+      this.xAxisHeight = element.clientHeight;
+      
+      this.initializeHeightOfYUnit();
+      this.initializeXAxisElements();
+      
+      if (barColor != null) this.barColor = barColor;
+    }, // function initializeProperties
+    
+    
+    // ----------------------------------------------
+    initializeYearValues : function()
+    {
+      this.yearValues = new Object();
+      var min = this.dates[0].getFullYear();
+      var max = this.dates[this.dates.length-1].getFullYear();
+      for (var i = min; i <= max; i++)
+      {
+        this.yearValues[i] = new Object();
+        this.yearValues[i].value = 0;
+      }      
+      for (var i = 0; i < this.dates.length; i++)
+      {
+        var year = this.dates[i].getFullYear();
+        this.yearValues[year].value++;
+      }
+    }, // function initializeYearValues
+    
+    
+    // ----------------------------------------------
+    initializeMonthValues : function()
+    {
+      this.monthValues = new Object();
+      var minYear = this.dates[0].getFullYear();
+      var maxYear = this.dates[this.dates.length-1].getFullYear();
+      for (var i = minYear; i <= maxYear; i++)
+      {
+        this.monthValues[i] = new Object();
+        for (var j = 0; j <= 11; j++)
+        {
+          this.monthValues[i][j] = new Object();
+          this.monthValues[i][j].value = 0;
+        }
+      }
+      
+      for (var i = 0; i < this.dates.length; i++)
+      {
+        var year = this.dates[i].getFullYear();
+        var month = this.dates[i].getMonth();
+        this.monthValues[year][month].value++;
+      }    
+    }, // function initializeMonthValues
+    
+    
+    // ----------------------------------------------
+    initializeXAxisElements : function()
+    {
+      var min = this.dates[0].getFullYear();
+      var max = this.dates[this.dates.length-1].getFullYear();
+      var widthOfXUnit = Math.floor( (this.histogramArea.widthWithoutPadding - this.yAxisWidth) / this.getNumberOfXUnits() );
+
+      this.xAxisElements = new Array();
+      
+      var i = 0;
+      
+      if (this.histogramType == "annually")
+      {
+        for (var year = min; year <= max; year++)
+        {
+          this.xAxisElements[i] = new Object();
+          
+          this.xAxisElements[i]["leftMargin"] = (year - min)*widthOfXUnit + 
+                                                this.histogramArea.paddingLeft + this.yAxisWidth + 1/* width of Y Axis border */;
+          this.xAxisElements[i]["bottomMargin"] = this.histogramArea.paddingBottom;
+          this.xAxisElements[i]["width"] = widthOfXUnit;
+          this.xAxisElements[i].xValue = year;
+          this.xAxisElements[i].yValue = this.yearValues[year].value;
+          i++;
+        } // for      
+      } else if (this.histogramType == "monthly")
+      {
+        for (var year in this.monthValues)
+        {
+          for (var month in this.monthValues[year])
+          {
+            this.xAxisElements[i] = new Object();
+            
+            this.xAxisElements[i]["leftMargin"] = i * widthOfXUnit +
+                                                  this.histogramArea.paddingLeft + this.yAxisWidth + 1/* withd of Y Axis border */;
+            this.xAxisElements[i]["bottomMargin"] = this.histogramArea.paddingBottom + this.xAxisHeight; // xAxisHeight is needed
+                                                      // because X Axis for months will be drawn above X Axis for years
+            this.xAxisElements[i]["width"] = widthOfXUnit;
+            this.xAxisElements[i].xValue = month * 1 + 1;
+            this.xAxisElements[i].yValue = this.monthValues[year][month].value;
+            this.xAxisElements[i].year = year; // year is needed to draw X Axis for years below X Axis for months
+            
+            i++;
+          }
+        }
+      }// if
+    }, // function initializeXAxisElements
+     
+     
+    // ----------------------------------------------
+    initializeHeightOfYUnit : function()
+    {
+      var numberOfYUnits = this.getNumberOfYUnits();
+
+      switch (this.histogramType)
+      {
+        case "annually" : this.heightOfYUnit = Math.floor( (this.histogramArea.heightWithoutPadding - this.xAxisHeight) / numberOfYUnits );
+                          break;
+        case "monthly"  : // we have two X Axis: for months and for years
+                          this.heightOfYUnit = Math.floor( (this.histogramArea.heightWithoutPadding - 2 * this.xAxisHeight) / numberOfYUnits );
+                          break;
+      }
+    
+    }, // function initializeHeightOfYUnit
+    
+    
+    // ----------------------------------------------
+    buildXAxis  : function()
+    {
+      for (var i = 0; i < this.xAxisElements.length; i++)
+      {
+        //var bottomMargin = this.xAxisElements[field]["bottomMargin"];
+        
+        var element = this.createGraphicElement( 
+          this.xAxisElements[i]["leftMargin"] - 1, 
+          this.xAxisElements[i]["bottomMargin"], 
+          this.xAxisElements[i]["width"] - this.borderWidth, 
+          this.xAxisHeight, 
+          this.xAxisElements[i].xValue);
+
+        element.style.borderTop = this.borderWidth + "px solid black";
+        element.style.borderLeft = this.borderWidth + "px solid black";
+        element.style.borderRight = this.borderWidth + "px solid black";
+
+        if (this.histogramType == "monthly" && (i + 1) % 12 == 0)
+        {
+          // draw X Axis for years below X Axis for months
+          var element = this.createGraphicElement( 
+            this.xAxisElements[i - 11]["leftMargin"] - 1, 
+            this.xAxisElements[i - 11]["bottomMargin"] - this.xAxisHeight, 
+            this.xAxisElements[i - 11]["width"] * 12 - 1, 
+            this.xAxisHeight, 
+            this.xAxisElements[i - 11].year);
+
+          element.style.borderTop = this.borderWidth + "px solid black";
+          element.style.borderLeft = this.borderWidth + "px solid black";
+          element.style.borderRight = this.borderWidth + "px solid black";
+        }
+      } // for
+    }, // function buildXAxis
+    
+    
+    // ----------------------------------------------
+    buildYAxis  : function()
+    {
+      for (var i = 1; i <= this.getNumberOfYUnits(); i++)
+      {
+        var marginBottom;
+        switch (this.histogramType)
+        {
+          case "annually" : marginBottom = this.histogramArea.paddingBottom + this.xAxisHeight;
+                            break;
+          case "monthly"  : marginBottom = this.histogramArea.paddingBottom + this.xAxisHeight * 2; // for months we have two X Axis :
+                                                                                                    // for month values and for year values
+                            break;
+        
+        }
+        
+        var element = this.createGraphicElement( 
+          this.histogramArea.paddingLeft /*x*/, 
+          marginBottom + this.heightOfYUnit*(i - 1) /*y*/, 
+          this.yAxisWidth /*width*/, 
+          this.heightOfYUnit - this.borderWidth /*height*/,
+          i);
+        element.style.borderTop = this.borderWidth + "px solid black";
+        element.style.borderBottom = this.borderWidth + "px solid black";
+        element.style.borderRight = this.borderWidth + "px solid black";
+      }
+    }, // function buildYAxis
+    
+    
+    // ----------------------------------------------
+    createGraphicElement  : function(x, y, width, height, text)
+    {
+      var element = document.createElement("div");
+      element.style.position = "absolute";
+      element.style.bottom = y + "px";
+      element.style.left = x + "px";
+      if (width != null) element.style.width = width + "px";
+      if (height != null) element.style.height = height + "px";
+      element.style.textAlign = "center";
+      element.style.textAlign = "center";
+      element.style.display = "table-cell";
+      element.style.verticalAlign = "middle";
+      element.innerHTML = text;
+      
+      if (width != null || height != null)
+      {
+        this.histogramArea.appendChild(element);
+      } else
+      {
+        element.style.visibility = "none";
+      }
+      return element;
+    },
+
+    
+    // ----------------------------------------------
+    getNumberOfXUnits : function()
+    {
+      var numberOfXUnits = 0;
+      var minYear = this.dates[0].getFullYear();
+      var maxYear = this.dates[this.dates.length-1].getFullYear();
+      
+      if (this.histogramType == "annually")
+      {
+        numberOfXUnits = maxYear - minYear + 1;
+      } else if (this.histogramType == "monthly")
+      {
+        numberOfXUnits = (maxYear - minYear + 1) * 12;
+      } // if
+    
+      return numberOfXUnits;
+    }, // function getNumberOfXUnits
+    
+    
+    // ----------------------------------------------
+    getNumberOfYUnits : function()
+    {
+      var numberOfYUnits = 0;
+      if (this.histogramType == "annually")
+      {
+        for (var field in this.yearValues)
+        {
+          if (this.yearValues[field].value > numberOfYUnits)
+          {
+            numberOfYUnits = this.yearValues[field].value;
+          }
+        }
+      } else if (this.histogramType == "monthly")
+      {
+        for (var year in this.monthValues)
+        {
+          for (var month in this.monthValues[year])
+          {
+            if (this.monthValues[year][month].value > numberOfYUnits)
+            {
+              numberOfYUnits = this.monthValues[year][month].value;
+            }
+          } // for
+        } // for  
+      } // if
+      
+      return numberOfYUnits;
+    }, // function getNumberOfYUnits
+    
+    
+    // ----------------------------------------------
+    buildHistogram  : function(showValuesInBars)
+    {    
+      for (var i = 0; i< this.xAxisElements.length; i++)
+      {
+        var height = this.xAxisElements[i].yValue * this.heightOfYUnit;
+        if (height < 0) height = 0;
+        var element = this.createGraphicElement(
+          this.xAxisElements[i]["leftMargin"] - 1/* overlap border of left element */, 
+          this.xAxisElements[i]["bottomMargin"] + this.xAxisHeight, 
+          this.xAxisElements[i]["width"] - this.borderWidth * 2 + 1/* overlap border of right element */, 
+          height,
+          "&nbsp;");
+        element.style.border = this.borderWidth + "px solid black";
+        element.style.borderBottom = "none";
+        element.style.backgroundColor = this.barColor;
+        
+        if (this.xAxisElements[i].yValue != 0 && showValuesInBars == true)
+        {
+          element.innerHTML = this.xAxisElements[i].yValue;
+        } else
+        {
+          element.title = this.xAxisElements[i].yValue;
+        }
+      }
+    } // function buildHistogram
+       
+
+  } // class Histogram
+
+</script>
+<input id="web_browser" value="FF" type="hidden"> 
+<input id="FF_TA_cols" value="long" type="hidden"> 
+<span id='loading_message'>Loading..</span> 
+<span id='all_visible_area' style='display:none'>
+  <select style="FLOAT: left" id="month"><option>January</option><option>February</option><option>March</option><option>April</option><option selected="selected">May</option><option>June</option><option>July</option><option>August</option><option>September</option><option>October</option><option>November</option><option>December</option>
+  </select>
+  <input style="FLOAT: left" id="year" maxlength="4" value="2013" size="4">
+  <button style="FLOAT: left" onclick="AddMonth(getElementById('month').selectedIndex, getElementById('year').value); SetBackgroundColor();" type="submit">Add month</button> 
+  <input style="FLOAT: left" id="save_with_tables" onclick="SaveAsWithTables();" value="Save with tables" type="button">
+  <input style="FLOAT: left" id="save_with_text" onclick="SaveAsWithText();" value="Save with text" type="button">
+  <input style="FLOAT: left" onclick="ExportData();" value="Export data" type="button">
+  <input style="FLOAT: left" id="show_hide_textarea_button" onclick="TextareaButton();" value="Import data" type="button">
+  <input style="float: left;" id="short_long_textarea_button" onclick="ShortLongTextareaButton();" value="Switch to short TEXTAREA" type="button">
+  <input style="FLOAT: left; MARGIN-LEFT: 1em" id="filter_text_box" onkeypress="if (event.keyCode==13)getElementById('filter_button').click(); "> 
+  <input style="FLOAT: left" id="filter_button" onclick="Filter( getElementById('filter_text_box').value, getElementById('filter_text_box').value );" value="Filter" type="button">
+  <input style="FLOAT: left; MARGIN-LEFT: 1em" id="graph_button" onclick="ShowHistogram();" value="Graph" disabled="disabled" type="button"> 
+
+<table style="position: absolute; background-color: white; right: 1px; display: none; z-index: 1;" id="menu" cellpadding="0" cellspacing="1">
+  <tbody>
+  <tr>
+    <td>
+      <table style="TEXT-ALIGN: right; BACKGROUND-COLOR: white" onmouseover="ShowMenu();" onmouseout="HideMenu()" cellpadding="0" cellspacing="0"><tbody>
+        <tr>
+          <td style="" id="head_menu" onmouseover="ShowMenu();" onmouseout="HideMenu()"><a href="javascript:;">Filters</a></td></tr>
+        <tr>
+          <td style="display: none;" id="menu_items" onmouseover="HideMenu()" onmouseout="ShowMenu();"></td></tr></tbody></table></td></tr></tbody></table></span><br><br><span style="DISPLAY: none" id="textarea_span"><textarea style="WIDTH: 60%; FLOAT: left; HEIGHT: 20%" onkeydown="OnKeyDown(event);" id="textarea">
+</textarea> 
+format 1: <kbd>Fri 20 Apr 2007 - events</kbd><br>format 2: <kbd>20 Apr 2007 - 
+events</kbd><br><kbd>#Menu_item : keyword1, keyword2</kbd><br><br>Paste text in 
+this area and press "Process data" button.<br><button onclick="ProcessData(); ShowTitleWithAsteric();" type="submit">Process 
+data</button> 
+<br>
+</span>
+<div style="display: none;" id="number_of_items_matched_filter">Found items "push-ups": 16</div><br>
+<div style="display: none;" id="histogram_area">
+  <div id="histogram_graph"></div>
+  <div id="radio_buttons">
+    <input onclick="BuildHistrogram();" type="radio" id="annually" name="histogram_type" value="annually"><label for="annually">Annually</label>
+    <br />
+    <input onclick="BuildHistrogram();" type="radio" id="monthly" name="histogram_type" value="monthly" checked="checked"><label for="monthly">Monthly</label>
+  </div>
+</div>
+<div style="display: none;" id="space_holder"></div>
+<script>PreLoadInit();</script>
+
+<div id="calendar_field"></div><iframe style="DISPLAY: none" id="w"> 
+abc</iframe>
+<script>
+  PostLoadInit();
+  
+  // for demo functionality
+  var filterValue = location.search.match( new RegExp("filter=([^&]+)&?") );
+  if (filterValue != null) 
+  {
+    filterValue = decodeURIComponent(filterValue[1]);
+    Filter(filterValue, filterValue);
+    
+    if (location.search.match( new RegExp("graph") ) != null)
+    {
+      ShowHistogram();
+    }
+  }
+</script>
+
+</body>
