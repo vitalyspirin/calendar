@@ -1,4 +1,4 @@
-# calendar
+# Calendar
 Web-app calendar that can be used in the browser offline.
 
 ## Adding events for calendar day
