@@ -1,5 +1,5 @@
 <head>
-<meta content="text/html; charset=utf-8" http-equiv="Content-Type"><title>Calendar - [C:/Spirin, Vitaly/Projects/Web/Calendar/my_calendar.htm]</title></head>
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type"><title>Calendar</title></head>
 <body>
 <style type="text/css">
     input[type="button"], input[type="text"] {float: le ft;}
@@ -58,6 +58,7 @@
 <!-- 07 April 2013    - Release of version 1.4 (added textbox for filtering) -->
 <!-- 06 May 2013      - Release of version 1.5 (added histogram) -->
 <!-- 22 Sep 2013      - Release of version 1.6 (added query string parameter: filter= and graph) -->
+<!-- 15 April 2016    - Release of version 1.7 (fix for saving in IE 11) -->
 
 var title;
 // -----------------------------------------------------------------------------
@@ -266,6 +267,23 @@ function SaveFileInIE(str, filename)
 
 
 // -----------------------------------------------------------------------------
+function isIE()
+{
+    var result = false;
+    var userAgent = window.navigator.userAgent;
+    var old_ie = userAgent.indexOf('MSIE ');
+    var new_ie = userAgent.indexOf('Trident/');
+
+    if ((old_ie > -1) || (new_ie > -1)) 
+    {
+        result = true;
+    }
+
+    return result;
+}
+
+
+// -----------------------------------------------------------------------------
 function SaveFile(str, filename)
 {
   if (filename_postfix != "")
@@ -273,9 +291,15 @@ function SaveFile(str, filename)
     filename = filename.replace(/(.*)\./, "$1_" + filename_postfix + ".");
   }; // if
 
-  if (document.all) result = SaveFileInIE(str, filename);
-  else result = SaveFileInFF(str, filename);
-
+  if ( isIE() )
+  {
+    result = SaveFileInIE(str, filename);
+  }
+  else
+  {  
+    result = SaveFileInFF(str, filename);
+  }
+  
   if (result == true && filename_postfix == "") ShowTitleWithoutAsteric();
 }
 
