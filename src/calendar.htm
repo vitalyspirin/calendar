@@ -9,7 +9,7 @@
     textarea.w {border: none; overflow: hidden; background-color: white;}
     textarea.wb {overflow: hidden; background-color: white;}
 
-    h2.i {display: inline;}
+    h2, h2.i {display: inline-block;}
 
     table {border: 0}
     
@@ -18,8 +18,10 @@
     td.r {color: red; width: 13%}
     td.l {color: red; width: 13.4%}
     td.b {color: black;}
-      td.b h2 {margin-bottom: 0.85em}
-
+    
+    td h2 {margin: 0 0 0.85em 0;}
+    td h1 {margin: 0 0 0.5em 0;}
+    
     a:hover {color: red;}
     
     #histogram_graph
@@ -59,6 +61,8 @@
 <!-- 06 May 2013      - Release of version 1.5 (added histogram) -->
 <!-- 22 Sep 2013      - Release of version 1.6 (added query string parameter: filter= and graph) -->
 <!-- 15 April 2016    - Release of version 1.7 (fix for saving in IE 11) -->
+<!-- 16 April 2016    - Release of version 1.8 (fix for saving in FF and Chrome and exporting data in IE) -->
+
 
 var title;
 // -----------------------------------------------------------------------------
@@ -218,6 +222,30 @@ function SaveFileInFF(str, filename)
   return result;
 }
 
+// -----------------------------------------------------------------------------
+function SaveFileInNonIE(str, filename)
+{
+  filename = GetConvertedFileName(filename);
+  filename = filename.replace(/\//g, "\\\\"); // in FF document.URL has forward slashes
+
+  // in FF "end of line" is "\n" (not "\r\n") so if to save like that, IE won't find "mark of the web"
+  str = str.replace("<!-- saved from url=(0014)about:internet -->",
+              "<!-- saved from url=(0014)about:internet -->\r");
+
+  //str = "ï»¿" + str; // first three bytes of the file to indicate UTF-8 format ("\xEF\xBB\xBF")
+
+  var data = 'data:application/csv;charset=utf-8,' + encodeURIComponent(str);
+  
+  var link = document.getElementById("linkToSaveFile");
+  link.href = data;
+  link.download = filename;
+  link.click();
+
+  result = true;
+
+  return result;
+}
+
 
 // -----------------------------------------------------------------------------
 function SaveFileInIE(str, filename)
@@ -245,7 +273,7 @@ function SaveFileInIE(str, filename)
 
   if (filename.match(/.*\.txt/))
   {
-    d.write(str);
+    d.write('<pre>' + str + '</pre>');
     d.close();
   } else
   {
@@ -297,7 +325,8 @@ function SaveFile(str, filename)
   }
   else
   {  
-    result = SaveFileInFF(str, filename);
+    filename = filename.split('/').slice(-1);
+    result = SaveFileInNonIE(str, filename);
   }
   
   if (result == true && filename_postfix == "") ShowTitleWithoutAsteric();
@@ -1676,7 +1705,7 @@ function HideHistogram()
         <tr>
           <td style="" id="head_menu" onmouseover="ShowMenu();" onmouseout="HideMenu()"><a href="javascript:;">Filters</a></td></tr>
         <tr>
-          <td style="display: none;" id="menu_items" onmouseover="HideMenu()" onmouseout="ShowMenu();"></td></tr></tbody></table></td></tr></tbody></table></span><br><br><span style="DISPLAY: none" id="textarea_span"><textarea style="WIDTH: 60%; FLOAT: left; HEIGHT: 20%" onkeydown="OnKeyDown(event);" id="textarea">
+          <td style="display: none;" id="menu_items" onmouseover="HideMenu()" onmouseout="ShowMenu();"></td></tr></tbody></table></td></tr></tbody></table></span><br><br><span style="DISPLAY: none" id="textarea_span"><textarea style="WIDTH: 60%; FLOAT: left; HEIGHT: 8em;" onkeydown="OnKeyDown(event);" id="textarea">
 </textarea> 
 format 1: <kbd>Fri 20 Apr 2007 - events</kbd><br>format 2: <kbd>20 Apr 2007 - 
 events</kbd><br><kbd>#Menu_item : keyword1, keyword2</kbd><br><br>Paste text in 
@@ -1698,6 +1727,7 @@ data</button>
 
 <div id="calendar_field"></div><iframe style="DISPLAY: none" id="w"> 
 abc</iframe>
+<a href="#" download="calendar.html" id="linkToSaveFile" target="_blank" style="display: none;"></a>
 <script>
   PostLoadInit();
   
