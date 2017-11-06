@@ -11,6 +11,7 @@ Web-app calendar that can be used in the browser offline.
 
 ## Using filter to show only required events
 <br /> 
+
 ![screenshot2.png](/docs/screenshot2.png "screenshot2.png")
 <br />     
 <br />
@@ -19,6 +20,7 @@ Web-app calendar that can be used in the browser offline.
 
 ## Using chart to show frequency of events
 <br /> 
+
 ![screenshot3.png](/docs/screenshot3.png "screenshot3.png")
 <br />     
 <br />
